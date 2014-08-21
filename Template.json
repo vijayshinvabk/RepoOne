@@ -1,0 +1,382 @@
+{
+  "Name": "Brewmaster.WebFarm",
+  "Description": "Creates a N (2 by default) server IIS WebFarm with WebDeploy publishing enabled.",
+  "Version": "0.2.0",
+  "Parameters": [
+    {
+      "Name": "Region",
+      "Type": "String",
+      "TypeHint": "AzureRegionName",
+      "Description": "Name of Azure region."
+    },
+    {
+      "Name": "AffinityGroup",
+      "Type": "String",
+      "TypeHint": "AzureAffinityGroupName",
+      "Description": "Name of Azure affinity group."
+    },
+    {
+      "Name": "CloudService",
+      "Type": "String",
+      "TypeHint": "AzureCloudServiceName",
+      "Description": "Name of the Azure Cloud Service."
+    },
+    {
+      "Name": "DiskStore",
+      "Type": "String",
+      "TypeHint": "AzureStorageName",
+      "Description": "Name of Azure disk storage account."
+    },
+    {
+      "Name": "VMSize",
+      "Type": "String",
+      "TypeHint": "AzureRoleSize",
+      "Description": "Size of the server VMs.",
+      "Default": "Small"
+    },
+    {
+      "Name": "AdminName",
+      "Type": "String",
+      "TypeHint": "username",
+      "Description": "Name of local administrator account.",
+      "Minimum": 1.0,
+      "Maximum": 64.0
+    },
+    {
+      "Name": "AdminPassword",
+      "Type": "String",
+      "TypeHint": "password",
+      "Description": "Password of local administrator account.",
+      "MaskValue": true,
+      "Minimum": 8.0,
+      "Maximum": 127.0
+    },
+    {
+      "Name": "ServerNamePrefix",
+      "Type": "String",
+      "Description": "Name prefix for web servers.",
+      "Default": "web",
+      "AllowedRegex": "^[a-zA-Z][a-zA-Z0-9-]{1,13}$",
+      "AllowedDescription": "Must contain 3 to 14 letters, numbers, and hyphens. Must start with a letter."
+    },
+    {
+      "Name": "NumberOfWebServers",
+      "Type": "Number",
+      "TypeHint": "integer",
+      "Description": "Number of web servers.",
+      "Default": "2",
+      "AllowedRegex": "^\\d+$",
+      "AllowedDescription": "Must enter a positive integer between 2 and 100.",
+      "Minimum": 2.0,
+      "Maximum": 100.0
+    }
+  ],
+  "Network": {
+    "DnsServers": [],
+    "LocalSites": [],
+    "VirtualSites": []
+  },
+  "AffinityGroup": {
+    "Name": "{{AffinityGroup}}",
+    "Region": "{{Region}}",
+    "Label": "DSC created affinity group"
+  },
+  "StorageAccounts": [
+    {
+      "Name": "{{DiskStore}}",
+      "AffinityGroup": "{{AffinityGroup}}",
+      "Region": "{{Region}}",
+      "Description": "A georedundant disk store",
+      "DisableGeoReplication": false
+    }
+  ],
+  "CloudServices": [
+    {
+      "Name": "{{CloudService}}",
+      "AffinityGroup": "{{AffinityGroup}}",
+      "Region": "{{Region}}",
+      "Description": "My WebFarm cloud service",
+      "Deployment": {
+        "VirtualMachines": [
+          {
+            "Name": "{{ServerNamePrefix}}1",
+            "RoleSize": "{{VMSize}}",
+            "AvailabilitySet": "webfarm-avset",
+            "OsVirtualDisk": {
+              "OsType": "Windows",
+              "OsImageName": "a699494373c04fc0bc8f2bb1389d6106__Windows-Server-2012-R2-*"
+            },
+            "WindowsConfigSet": {
+              "LocalAdminCredentialId": "vmadmin",
+              "EnableAutomaticUpdates": false,
+              "ChangePasswordAtLogon": false,
+              "DisableRdp": false
+            },
+            "ConfigSets": [
+              "WebFarmServer",
+              "WebDeployPublishServer"
+            ]
+          }
+{% for i in (2..NumberOfWebServers) -%}
+          ,{
+            "Name": "{{ServerNamePrefix}}{{i}}",
+            "RoleSize": "{{VMSize}}",
+            "AvailabilitySet": "webfarm-avset",
+            "OsVirtualDisk": {
+              "OsType": "Windows",
+              "OsImageName": "a699494373c04fc0bc8f2bb1389d6106__Windows-Server-2012-R2-*"
+            },
+            "WindowsConfigSet": {
+              "LocalAdminCredentialId": "vmadmin",
+              "EnableAutomaticUpdates": false,
+              "ChangePasswordAtLogon": false,
+              "DisableRdp": false
+            },
+            "ConfigSets": [
+              "WebFarmServer"
+            ]
+          }
+{% endfor -%}
+        ],
+        "DiskStorageAccount": "{{DiskStore}}"
+      }
+    }
+  ],
+  "DeploymentGroups": [],
+  "Credentials": [
+    {
+      "Name": "vmadmin",
+      "UserName": "{{AdminName}}",
+      "Password": "{{AdminPassword}}"
+    }
+  ],
+  "ConfigSets": [
+    {
+      "Name": "WebFarmServer",
+      "Description": "Web farm server",
+      "Endpoints": [
+        {
+          "Name": "HTTP",
+          "LocalPort": 80,
+          "Protocol": "tcp",
+          "Port": 80,
+          "EnableDirectServerReturn": false,
+          "Rules": [],
+          "LoadBalancerProbe": {
+            "Name": "http",
+            "Protocol": "Http",
+            "Path": "/",
+            "IntervalInSeconds": 15,
+            "TimeoutInSeconds": 31
+          }
+        },
+        {
+          "Name": "HTTPS",
+          "LocalPort": 443,
+          "Protocol": "tcp",
+          "Port": 443,
+          "EnableDirectServerReturn": false,
+          "Rules": [],
+          "LoadBalancerProbe": {
+            "Name": "https",
+            "Protocol": "Tcp",
+            "IntervalInSeconds": 15,
+            "TimeoutInSeconds": 31
+          }
+        }
+      ],
+      "ConfigurationIds": [
+        "InstallWebFarm"
+      ]
+    },
+    {
+      "Name": "WebDeployPublishServer",
+      "Description": "Web deploy publish server",
+      "Endpoints": [
+        {
+          "Name": "WebDeploy",
+          "LocalPort": 8172,
+          "Protocol": "tcp",
+          "Port": 8172,
+          "EnableDirectServerReturn": false,
+          "Rules": []
+        }
+      ],
+      "ConfigurationIds": [
+        "SyncWebFarmContent"
+      ]
+    }
+  ],
+  "Configurations": [
+    {
+      "Name": "InstallWebFarm",
+      "Resources": [
+        {
+          "Type": "Package",
+          "ImportModule": null,
+          "ImportTypeName": null,
+          "Name": "InstallWebPI",
+          "Args": {
+            "Credential": "vmadmin",
+            "Name": "Microsoft Web Platform Installer 4.6",
+            "ProductId": "16C7D2AD-20CA-491E-80BC-8607A9AACED9",
+            "Path": "http://download.microsoft.com/download/7/0/4/704CEB4C-9F42-4962-A2B0-5C84B0682C7A/WebPlatformInstaller_amd64_en-US.msi",
+            "LogPath": "%BrewmasterDir%\\Logs\\WebPlatformInstaller_amd64_en-US.log",
+            "Ensure": "Present"
+          },
+          "Nodes": [],
+          "Requires": [],
+          "Description": null
+        },
+        {
+          "Type": "WindowsFeature",
+          "ImportModule": null,
+          "ImportTypeName": null,
+          "Name": "InstallASPNET45",
+          "Args": {
+            "Name": "NET-Framework-45-ASPNET",
+            "IncludeAllSubFeature": "true",
+            "LogPath": "%BrewmasterDir%\\Logs\\Install-ASPNET45.log",
+            "Ensure": "Present"
+          },
+          "Nodes": [],
+          "Requires": [],
+          "Description": null
+        },
+        {
+          "Type": "WindowsFeature",
+          "ImportModule": null,
+          "ImportTypeName": null,
+          "Name": "InstallIIS",
+          "Args": {
+            "Name": "Web-Server",
+            "IncludeAllSubFeature": "true",
+            "LogPath": "%BrewmasterDir%\\Logs\\Install-IIS.log",
+            "Ensure": "Present"
+          },
+          "Nodes": [],
+          "Requires": [],
+          "Description": null
+        },
+        {
+          "Type": "Registry",
+          "ImportModule": null,
+          "ImportTypeName": null,
+          "Name": "EnableRemoteManagement",
+          "Args": {
+            "Key": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\WebManagement\\Server",
+            "ValueName": "EnableRemoteManagement",
+            "ValueData": "1",
+            "ValueType": "Dword",
+            "Force": "true",
+            "Ensure": "Present"
+          },
+          "Nodes": [],
+          "Requires": [
+            "[WindowsFeature]InstallIIS",
+            "[WindowsFeature]InstallASPNET45"
+          ],
+          "Description": null
+        },
+        {
+          "Type": "Service",
+          "ImportModule": null,
+          "ImportTypeName": null,
+          "Name": "StartWebManagementService",
+          "Args": {
+            "Name": "wmsvc",
+            "StartupType": "Automatic",
+            "State": "Running"
+          },
+          "Nodes": [],
+          "Requires": [
+            "[Registry]EnableRemoteManagement"
+          ],
+          "Description": null
+        },
+        {
+          "Credential": "vmadmin",
+          "GetScript": "return @{ Installed = Test-Path -LiteralPath \"$env:ProgramFiles\\IIS\\Microsoft Web Deploy V3\\msdeploy.exe\" -PathType Leaf }\r\n",
+          "SetScript": "$webpicmdexe = \"$env:ProgramFiles\\Microsoft\\Web Platform Installer\\WebPICmd.exe\"\r\n$webpicmdargs = @(\"/Install\", \"/Products:WDeployPS\", \"/AcceptEula\", \"/SuppressReboot\", \"/Log:$env:BrewmasterDir\\Logs\\WebDeploy-Install.log\")\r\nWrite-Verbose \"Installing WebDeploy V3 ($webpicmdexe $webpicmdargs)\" -Verbose\r\nStart-Process -FilePath $webpicmdexe -ArgumentList $webpicmdargs -Wait\r\nif (!(Test-Path -LiteralPath \"$env:ProgramFiles\\IIS\\Microsoft Web Deploy V3\\msdeploy.exe\" -PathType Leaf))\r\n{\r\n    Throw \"$env:ProgramFiles\\IIS\\Microsoft Web Deploy V3\\msdeploy.exe was not installed.\"\r\n}\r\n",
+          "TestScript": "if (Test-Path -LiteralPath \"$env:ProgramFiles\\IIS\\Microsoft Web Deploy V3\\msdeploy.exe\" -PathType Leaf)\r\n{\r\n    Write-Verbose \"$env:ProgramFiles\\IIS\\Microsoft Web Deploy V3\\msdeploy.exe already exists.\" -Verbose\r\n    return $true\r\n}\r\nreturn $false\r\n",
+          "Type": "Script",
+          "ImportModule": null,
+          "ImportTypeName": null,
+          "Name": "InstallWebDeploy",
+          "Args": {},
+          "Nodes": [],
+          "Requires": [
+            "[Service]StartWebManagementService",
+            "[Package]InstallWebPI"
+          ],
+          "Description": null
+        },
+        {
+          "Type": "xFirewall",
+          "ImportModule": "xNetworking",
+          "ImportTypeName": "MSFT_xFirewall",
+          "Name": "OpenWebDeployPort",
+          "Args": {
+            "Name": "WebDeploy",
+            "Description": "WebDeploy (TCP in)",
+            "LocalPort": "8172",
+            "Protocol": "TCP",
+            "Access": "Allow",
+            "State": "Enabled",
+            "Direction": "Inbound"
+          },
+          "Nodes": [],
+          "Requires": [
+            "[Script]InstallWebDeploy"
+          ],
+          "Description": null
+        }
+      ],
+      "Args": {}
+    },
+    {
+      "Name": "SyncWebFarmContent",
+      "Resources": [
+        {
+          "Type": "File",
+          "ImportModule": null,
+          "ImportTypeName": null,
+          "Name": "CreateSyncContentScript",
+          "Args": {
+            "DestinationPath": "%BrewmasterDir%\\SyncContentNow.ps1",
+            "Type": "File",
+            "Ensure": "Present",
+            "Force": "True",
+            "Contents": "& \"%BrewmasterTemplateDir%\\Files\\Powershell\\WebDeploySyncContent.ps1\" -WebServers \"{{ServerNamePrefix}}1{% for i in (2..NumberOfWebServers) %} {{ServerNamePrefix}}{{i}}{% endfor %}\"",
+            "Checksum": "SHA-1"
+          },
+          "Nodes": [],
+          "Requires": [],
+          "Description": null
+        },
+        {
+          "Type": "ScheduledJob",
+          "ImportModule": "AditiResources",
+          "ImportTypeName": "Aditi_ScheduledJob",
+          "Name": "CreateSyncContentTask",
+          "Args": {
+            "Name": "Aditi_Brewmaster_WebFarm_ContentSync",
+            "FilePath": "%BrewmasterDir%\\SyncContentNow.ps1",
+            "Ensure": "Present",
+            "At": "%%\"$(Get-Date)\"",
+            "Once": "true",
+            "Minutes": "5",
+            "Credential": "vmadmin"
+          },
+          "Nodes": [],
+          "Requires": [
+            "[File]CreateSyncContentScript"
+          ],
+          "Description": null
+        }
+      ],
+      "Args": {}
+    }
+  ]
+}
+
